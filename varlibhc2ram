@@ -2,35 +2,35 @@
 
 . /etc/varlibhc2ram.conf
 
-HDD_LOG=/var/lib/hdd.hc
-RAM_LOG=/var/lib/hc
+HDD_VARLIBHC=/var/lib/hdd.hc
+RAM_VARLIBHC=/var/lib/hc
 
 LOG_NAME="varlibhc2ram.log"
-LOG2RAM_LOG="${RAM_LOG}/${LOG_NAME}"
-LOG_OUTPUT="tee -a $LOG2RAM_LOG"
+VARLIBHC2RAM_LOG="/var/log/${LOG_NAME}"
+LOG_OUTPUT="tee -a $VARLIBHC2RAM_LOG"
 
 isSafe () {
-    [ -d $HDD_LOG/ ] || echo "ERROR: $HDD_LOG/ doesn't exist! Can't sync."
-    [ -d $HDD_LOG/ ] || exit 1
+    [ -d $HDD_VARLIBHC/ ] || echo "ERROR: $HDD_VARLIBHC/ doesn't exist! Can't sync."
+    [ -d $HDD_VARLIBHC/ ] || exit 1
 }
 
 syncToDisk () {
     isSafe
 
     if [ "$USE_RSYNC" = true ]; then
-        rsync -aXWv --delete --links $RAM_LOG/ $HDD_LOG/ 2>&1 | $LOG_OUTPUT
+        rsync -aXWv --delete --links $RAM_VARLIBHC/ $HDD_VARLIBHC/ 2>&1 | $LOG_OUTPUT
     else
-        cp -rfup $RAM_LOG/ -T $HDD_LOG/ 2>&1 | $LOG_OUTPUT
+        cp -rfup $RAM_VARLIBHC/ -T $HDD_VARLIBHC/ 2>&1 | $LOG_OUTPUT
     fi
 }
 
 syncFromDisk () {
     isSafe
 
-    if [ ! -z "$(du -sh -t "$SIZE" $HDD_LOG/ | cut -f1)" ]; then
+    if [ ! -z "$(du -sh -t "$SIZE" $HDD_VARLIBHC/ | cut -f1)" ]; then
         echo "ERROR: RAM disk too small. Can't sync."
-        umount -l $RAM_LOG/
-        umount -l $HDD_LOG/
+        umount -l $RAM_VARLIBHC/
+        umount -l $HDD_VARLIBHC/
         if [ "$MAIL" = true ]; then
             echo "varlibhc2ram : No place on RAM anymore, fallback on the disk" | mail -s 'Varlibhc2ram Error' root;
         fi
@@ -38,9 +38,9 @@ syncFromDisk () {
     fi
 
     if [ "$USE_RSYNC" = true ]; then
-        rsync -aXWv --delete --links $HDD_LOG/ $RAM_LOG/ 2>&1 | $LOG_OUTPUT
+        rsync -aXWv --delete --links $HDD_VARLIBHC/ $RAM_VARLIBHC/ 2>&1 | $LOG_OUTPUT
     else
-        cp -rfup $HDD_LOG/ -T $RAM_LOG/ 2>&1 | $LOG_OUTPUT
+        cp -rfup $HDD_VARLIBHC/ -T $RAM_VARLIBHC/ 2>&1 | $LOG_OUTPUT
     fi
 }
 
@@ -66,17 +66,17 @@ createZramLogDrive () {
 
 case "$1" in
   start)
-      [ -d $HDD_LOG/ ] || mkdir $HDD_LOG/
-      mount --bind $RAM_LOG/ $HDD_LOG/
-      mount --make-private $HDD_LOG/
-      wait_for $HDD_LOG
+      [ -d $HDD_VARLIBHC/ ] || mkdir $HDD_VARLIBHC/
+      mount --bind $RAM_VARLIBHC/ $HDD_VARLIBHC/
+      mount --make-private $HDD_VARLIBHC/
+      wait_for $HDD_VARLIBHC
 	if [ "$ZL2R" = true ]; then
 		createZramLogDrive
-		mount -t ext4 -o nosuid,noexec,nodev,user=varlibhc2ram /dev/zram${RAM_DEV} ${RAM_LOG}/
+		mount -t ext4 -o nosuid,noexec,nodev,user=varlibhc2ram /dev/zram${RAM_DEV} ${RAM_VARLIBHC}/
 	else
-		mount -t tmpfs -o nosuid,noexec,nodev,mode=0755,size=${SIZE} varlibhc2ram $RAM_LOG/
+		mount -t tmpfs -o nosuid,noexec,nodev,mode=0755,size=${SIZE} varlibhc2ram $RAM_VARLIBHC/
 	fi
-      wait_for $RAM_LOG
+      wait_for $RAM_VARLIBHC
       syncFromDisk
       ;;
 
@@ -84,8 +84,8 @@ case "$1" in
       syncToDisk
 	#ZRAM_LOG=$(awk '$2 == "/var/log" {print $1}' /proc/mounts)
 	#ZRAM_LOG=$(echo ${ZRAM_LOG} | grep -o -E '[0-9]+')
-      umount -l $RAM_LOG/
-      umount -l $HDD_LOG/
+      umount -l $RAM_VARLIBHC/
+      umount -l $HDD_VARLIBHC/
 	# Unsure as even with Root permision denied
 	#echo ${ZRAM_LOG} > /sys/class/zram-control/hot_remove
       ;;
